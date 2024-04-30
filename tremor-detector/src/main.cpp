@@ -1,5 +1,7 @@
 #include <mbed.h>
+
 #include "dft.cpp"
+#include "detection.cpp"
 
 // Defining register locations
 #define CTRL_REG1 0x20

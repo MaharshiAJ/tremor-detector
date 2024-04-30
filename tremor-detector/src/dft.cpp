@@ -27,6 +27,20 @@ void dft(float *x, int size, int N, float *Xreal, float *Ximag)
 /*
 Xreal = The real portion of the dft
 Ximag = The imaginary portion of the dft
+size = The size of the Xreal, Ximag arrays
+mag = The magnitude of the dft
+*/
+void magnitude(float *Xreal, float *Ximag, int size, float *mag)
+{
+    for (int i = 0; i < size; i++)
+    {
+        mag[i] = sqrt((Xreal[i] * Xreal[i]) + (Ximag[i] * Ximag[i]));
+    }
+}
+
+/*
+Xreal = The real portion of the dft
+Ximag = The imaginary portion of the dft
 N = Number of dft points
 psd = Power Spectral Density
 */
