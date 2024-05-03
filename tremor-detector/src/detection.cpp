@@ -1,4 +1,5 @@
-#define MAX_INTENSITY 100 // Arbritary value can change
+#include "detection.h"
+#include <stdio.h>
 
 #define MIN_FREQ 3 // Min frequency of desired tremor
 #define MAX_FREQ 6 // Max frequency of desired tremor
@@ -21,13 +22,14 @@ int detectPeakIntensity(float *mag, int size, int sampleRate)
     // Finding max magnitude in the desired frequency range
     for (int i = minI; i <= maxI; i++)
     {
+        printf("maxmag: %f\n", maxMag);
         if (mag[i] > maxMag)
         {
             maxMag = mag[i];
         }
     }
 
-    int intensity = (int)((maxMag / MAX_INTENSITY) * MAX_INTENSITY);
+    int intensity = (int)(maxMag);
 
     return intensity;
 }
