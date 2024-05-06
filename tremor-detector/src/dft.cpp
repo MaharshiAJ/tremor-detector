@@ -25,20 +25,6 @@ void dft(float *x, int size, int N, float *power)
             Ximag -= x[n] * sin(2 * PI * k * n / N);
         }
 
-        power[k] = sqrt((Xreal * Xreal) + (Ximag * Ximag));
+        power[k] = ((Xreal * Xreal) + (Ximag * Ximag)) / size;
     }
 }
-
-// /*
-// Xreal = The real portion of the dft
-// Ximag = The imaginary portion of the dft
-// N = Number of dft points
-// psd = Power Spectral Density
-// */
-// void psd(float *Xreal, float *Ximag, int N, float *psd)
-// {
-//     for (int k = 0; k < N; k++)
-//     {
-//         psd[k] = (Xreal[k] * Xreal[k] + Ximag[k] * Ximag[k]) / N;
-//     }
-// }

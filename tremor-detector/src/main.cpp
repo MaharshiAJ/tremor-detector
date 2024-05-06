@@ -33,7 +33,7 @@ I2_WTM = 0 : Disable FIFO watermark interrupt on INT2
 I2_ORun = 0 : Disable FIFO overrun interrupt on INT2
 I2_Empty = 0 : Disable FIFO empty interrupt on INT2
 */
-// #define CTRL_REG3_CONFIG 0b0'0'0'0'1'000
+#define CTRL_REG3_CONFIG 0b0'0'0'0'1'000
 
 /*
 CTRL_REG4_CONFIG defined with bits
@@ -46,14 +46,16 @@ SIM = 0 : 4-Wire interface
 */
 #define CTRL_REG4_CONFIG 0b0'0'01'0'00'0
 
-#define SPI_FLAG 1 // Flag for SPI communication completion
-// #define DATA_READY_FLAG 2 // Data ready flag
+#define SPI_FLAG 1        // Flag for SPI communication completion
+#define DATA_READY_FLAG 2 // Data ready flag
 
 // Factor used when converting raw sensor data
 #define SCALING_FACTOR (17.5f * 0.0174532925199432957692236907684886f / 1000.0f)
 #define SAMPLE_RATE 200 // Hz
-#define WINDOW_SIZE 3   // Seconds
+#define WINDOW_SIZE 1   // Seconds
 #define WINDOW_ARR_SIZE (SAMPLE_RATE * WINDOW_SIZE)
+#define FILTER_COEFFICIENT 0.1f
+#define INTENSITY_THRESHOLD 50
 
 EventFlags flags;
 
@@ -63,10 +65,10 @@ void spi_cb(int event)
   flags.set(SPI_FLAG);
 }
 // Call back for data ready
-// void data_cb()
-// {
-//   flags.set(DATA_READY_FLAG);
-// }
+void data_cb()
+{
+  flags.set(DATA_READY_FLAG);
+}
 
 float compute_magnitude(float x, float y, float z)
 {
@@ -75,24 +77,47 @@ float compute_magnitude(float x, float y, float z)
 
 DigitalOut led(LED1);
 
-void init_arr(float *arr, int size)
+float gyro_data[WINDOW_ARR_SIZE] = {0};
+int window_index = 0;
+
+int blink_speed = 500;
+Mutex blink_speed_mutex;
+
+// TODO: LED blinking speed is not changing on the board
+void blink(DigitalOut *led)
 {
-  for (int i = 0; i < size; i++)
+  while (1)
   {
-    arr[i] = 0;
+    blink_speed_mutex.lock();
+    int current_speed = blink_speed;
+    blink_speed_mutex.unlock();
+
+    *led = !*led;
+    thread_sleep_for(current_speed);
   }
 }
 
-void print_arr(float *arr, int size)
+void set_speed(int intensity)
 {
-  for (int i = 0; i < size; i++)
+  blink_speed_mutex.lock();
+  if (500 - intensity <= 0)
   {
-    printf("%f\n", arr[i]);
+    blink_speed = 10;
   }
+  else
+  {
+    blink_speed = 500 - intensity;
+  }
+  blink_speed_mutex.unlock();
 }
 
-float gyro_data[WINDOW_ARR_SIZE];
-int data_index = 0;
+void print_arr(float *toprint)
+{
+  for (int i = 0; i < WINDOW_ARR_SIZE; i++)
+  {
+    printf("%f\n", toprint[i]);
+  }
+}
 
 int main()
 {
@@ -100,8 +125,8 @@ int main()
 
   uint8_t write_buf[32], read_buf[32];
 
-  // InterruptIn int2(PA_2, PullDown);
-  // int2.rise(&data_cb);
+  InterruptIn int2(PA_2, PullDown);
+  int2.rise(&data_cb);
 
   spi.format(8, 3);
   spi.frequency(1'000'000);
@@ -116,23 +141,32 @@ int main()
   spi.transfer(write_buf, 2, read_buf, 2, spi_cb);
   flags.wait_all(SPI_FLAG);
 
-  // write_buf[0] = CTRL_REG3;
-  // write_buf[1] = CTRL_REG3_CONFIG;
-  // spi.transfer(write_buf, 2, read_buf, 2, spi_cb);
-  // flags.wait_all(SPI_FLAG);
+  write_buf[0] = CTRL_REG3;
+  write_buf[1] = CTRL_REG3_CONFIG;
+  spi.transfer(write_buf, 2, read_buf, 2, spi_cb);
+  flags.wait_all(SPI_FLAG);
 
   // Dummy data
-  // write_buf[1] = 0xFF;
+  write_buf[1] = 0xFF;
 
-  float power[WINDOW_ARR_SIZE];
-  init_arr(gyro_data, WINDOW_ARR_SIZE);
+  float power[WINDOW_ARR_SIZE] = {0};
+
+  if (!(flags.get() & DATA_READY_FLAG) && (int2.read() == 1))
+  {
+    flags.set(DATA_READY_FLAG);
+  }
+
+  float filtered_gx = 0.0f, filtered_gy = 0.0f, filtered_gz = 0.0f;
+  int intensity;
+  Thread tf;
+  tf.start(callback(&blink, &led));
 
   while (1)
   {
     uint16_t raw_gx, raw_gy, raw_gz;
     float gx, gy, gz;
 
-    // flags.wait_all(DATA_READY_FLAG);
+    flags.wait_all(DATA_READY_FLAG);
 
     write_buf[0] = OUT_X_L | 0x80 | 0x40;
 
@@ -149,33 +183,23 @@ int main()
     gy = ((float)raw_gy) * SCALING_FACTOR;
     gz = ((float)raw_gz) * SCALING_FACTOR;
 
-    // Convert to a magnitude and store in window
-    gyro_data[data_index] = compute_magnitude(gx, gy, gz);
+    filtered_gx = FILTER_COEFFICIENT * gx + (1 - FILTER_COEFFICIENT) * filtered_gx;
+    filtered_gy = FILTER_COEFFICIENT * gy + (1 - FILTER_COEFFICIENT) * filtered_gy;
+    filtered_gz = FILTER_COEFFICIENT * gz + (1 - FILTER_COEFFICIENT) * filtered_gz;
 
-    // Reset index to zero when the window is fully filled out and perform dft
-    data_index += 1;
+    gyro_data[window_index] = compute_magnitude(filtered_gx, filtered_gy, filtered_gz);
 
-    if (data_index >= WINDOW_ARR_SIZE)
+    window_index++;
+
+    if (window_index >= WINDOW_ARR_SIZE)
     {
-      data_index = 0;
-
       dft(gyro_data, WINDOW_ARR_SIZE, WINDOW_ARR_SIZE, power);
-
-      int intensity = detectPeakIntensity(power, WINDOW_ARR_SIZE, SAMPLE_RATE);
-
-      printf("Intensity: %d", intensity);
-
-      init_arr(gyro_data, WINDOW_ARR_SIZE);
+      intensity = detectPeakIntensity(power, WINDOW_ARR_SIZE, SAMPLE_RATE);
+      printf("Intensity: %d\n", intensity);
+      set_speed(intensity);
+      printf("Blink speed: %d\n", blink_speed);
+      window_index = 0;
     }
-
-    thread_sleep_for(5);
-
-    // if (intensity > 0)
-    // {
-    //   int delay = 1000 - intensity;
-    // }
-
-    // // Wait before reading next point
-    // thread_sleep_for(5);
+    // thread_sleep_for(100);
   }
 }
