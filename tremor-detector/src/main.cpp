@@ -55,7 +55,9 @@ SIM = 0 : 4-Wire interface
 #define WINDOW_SIZE 1   // Seconds
 #define WINDOW_ARR_SIZE (SAMPLE_RATE * WINDOW_SIZE)
 #define FILTER_COEFFICIENT 0.1f
-#define INTENSITY_THRESHOLD 50
+#define INTENSITY_SCALER 5
+#define DEFAULT_BLINK_SPEED 1000 // ms
+#define MINIMUM_BLINK_SPEED 10   // ms
 
 EventFlags flags;
 
@@ -80,17 +82,19 @@ DigitalOut led(LED1);
 float gyro_data[WINDOW_ARR_SIZE] = {0};
 int window_index = 0;
 
-int blink_speed = 500;
+int blink_speed = DEFAULT_BLINK_SPEED;
 Mutex blink_speed_mutex;
 
-// TODO: LED blinking speed is not changing on the board
 void blink(DigitalOut *led)
 {
+  int current_speed;
   while (1)
   {
     blink_speed_mutex.lock();
-    int current_speed = blink_speed;
+    current_speed = blink_speed;
     blink_speed_mutex.unlock();
+
+    printf("Blink speed: %d\n", current_speed);
 
     *led = !*led;
     thread_sleep_for(current_speed);
@@ -100,14 +104,7 @@ void blink(DigitalOut *led)
 void set_speed(int intensity)
 {
   blink_speed_mutex.lock();
-  if (500 - intensity <= 0)
-  {
-    blink_speed = 10;
-  }
-  else
-  {
-    blink_speed = 500 - intensity;
-  }
+  blink_speed = max(MINIMUM_BLINK_SPEED, DEFAULT_BLINK_SPEED - (intensity * INTENSITY_SCALER));
   blink_speed_mutex.unlock();
 }
 
@@ -195,9 +192,7 @@ int main()
     {
       dft(gyro_data, WINDOW_ARR_SIZE, WINDOW_ARR_SIZE, power);
       intensity = detectPeakIntensity(power, WINDOW_ARR_SIZE, SAMPLE_RATE);
-      printf("Intensity: %d\n", intensity);
       set_speed(intensity);
-      printf("Blink speed: %d\n", blink_speed);
       window_index = 0;
     }
     // thread_sleep_for(100);
