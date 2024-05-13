@@ -2,6 +2,7 @@
 
 #include "dft.h"
 #include "detection.h"
+#include "drivers/stm32f429i_discovery_lcd.h"
 
 // Defining register locations
 #define CTRL_REG1 0x20
@@ -116,8 +117,32 @@ void print_arr(float *toprint)
   }
 }
 
+
+void updateLCD(float intensity, bool isTremorDetected) {
+    BSP_LCD_Clear(LCD_COLOR_WHITE);
+    BSP_LCD_SetFont(&Font20);
+    
+    // Display tremor intensity
+    char buffer[50];
+    sprintf(buffer, "Intensity: %.2f", intensity);
+    BSP_LCD_DisplayStringAt(0, LINE(1), (uint8_t *)buffer, CENTER_MODE);
+
+    // Display tremor status
+    sprintf(buffer, "Tremor Detected: %s", isTremorDetected ? "Yes" : "No");
+    BSP_LCD_DisplayStringAt(0, LINE(3), (uint8_t *)buffer, CENTER_MODE);
+}
+
+
 int main()
 {
+    BSP_LCD_Init();
+    BSP_LCD_LayerDefaultInit(LTDC_ACTIVE_LAYER, LCD_FRAME_BUFFER);
+    BSP_LCD_SelectLayer(LTDC_ACTIVE_LAYER);
+    BSP_LCD_Clear(LCD_COLOR_WHITE);
+    BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
+    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+    BSP_LCD_DisplayOn();
+
   SPI spi(PF_9, PF_8, PF_7, PC_1, use_gpio_ssel);
 
   uint8_t write_buf[32], read_buf[32];
@@ -192,6 +217,8 @@ int main()
     {
       dft(gyro_data, WINDOW_ARR_SIZE, WINDOW_ARR_SIZE, power);
       intensity = detectPeakIntensity(power, WINDOW_ARR_SIZE, SAMPLE_RATE);
+      bool isTremorDetected = intensity > 20; // Define your threshold
+      updateLCD(intensity, isTremorDetected);
       set_speed(intensity);
       window_index = 0;
     }
