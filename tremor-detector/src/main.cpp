@@ -135,14 +135,6 @@ void updateLCD(float intensity, bool isTremorDetected) {
 
 int main()
 {
-    BSP_LCD_Init();
-    BSP_LCD_LayerDefaultInit(LTDC_ACTIVE_LAYER, LCD_FRAME_BUFFER);
-    BSP_LCD_SelectLayer(LTDC_ACTIVE_LAYER);
-    BSP_LCD_Clear(LCD_COLOR_WHITE);
-    BSP_LCD_SetBackColor(LCD_COLOR_WHITE);
-    BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-    BSP_LCD_DisplayOn();
-
   SPI spi(PF_9, PF_8, PF_7, PC_1, use_gpio_ssel);
 
   uint8_t write_buf[32], read_buf[32];
