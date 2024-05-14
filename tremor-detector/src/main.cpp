@@ -1,9 +1,19 @@
-// Parkinson's Tremor Detection Using STM32 F429 Discovery Board
-#include <mbed.h>
+/*
 
+Parkinson's Tremor Detection Using STM32 F429 Discovery Board
+
+TEAM MEMBERS:
+Maharshi Joshi mj3128
+Maadesh Sivakumar ms14306
+Jinkai Zhou jz6443
+
+*/ 
+#include <mbed.h>
+#include <drivers/LCD_DISCO_F429ZI.h>
 // Timer for periodic actions
 Ticker periodicTicker;
 volatile int tickCount = 0;
+LCD_DISCO_F429ZI lcd;  // Create an instance of the LCD class
 
 // Increment the tick counter in a cyclic manner
 void updateTickCount() {
@@ -28,6 +38,8 @@ void onSPIDone(int status) {
 #define CONVERSION_FACTOR (0.0174533f)  // Radians per degree
 
 int main() {
+    lcd.Init();  // Initialize the LCD
+    lcd.Clear(LCD_COLOR_BLACK);  // Clear the LCD with a black background
     // Output indicators
     DigitalOut tremorIndicator(LED1, 0), severityIndicator(LED2, 0);
 
@@ -105,16 +117,20 @@ int main() {
         if (meanAngularY > 5) {
             tremorCount++;
             tremorIndicator = 1;
+            lcd.Clear(LCD_COLOR_GREEN);
         } else {
             tremorCount = tremorCount < 10 ? 0 : tremorCount - 10;
             tremorIndicator = 0;
+            lcd.Clear(LCD_COLOR_BLACK);  // Clear to black when there is no tremor
         }
 
         if (tremorCount > 200) {
             if (meanAngularY > 20) {
                 severityIndicator = !severityIndicator;  // Toggle the LED for severe tremors
+                lcd.Clear(LCD_COLOR_RED);
             } else {
                 severityIndicator = 1;
+                lcd.Clear(LCD_COLOR_GREEN);
             }
         } else {
             severityIndicator = 0;
